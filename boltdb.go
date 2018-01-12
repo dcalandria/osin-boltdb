@@ -197,7 +197,7 @@ func (s *Storage) putAccess(tx *bolt.Tx, access *osin.AccessData, f writeFunc) e
 
 func (s *Storage) getAccess(tx *bolt.Tx, token string) (*osin.AccessData, error) {
 	msg := &model.AccessData{}
-	err := s.get(tx, clientBucket, []byte(token), msg)
+	err := s.get(tx, accessBucket, []byte(token), msg)
 	if err != nil {
 		return nil, err
 	}
