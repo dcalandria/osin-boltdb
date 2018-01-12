@@ -1,8 +1,6 @@
 package boltdb
 
 import (
-	"os"
-	"path"
 	"time"
 
 	"github.com/RangelReale/osin"
@@ -27,23 +25,11 @@ var (
 	}
 )
 
-func initDB(db *bolt.DB) error {
-	return db.Update(func(tx *bolt.Tx) error {
-		for _, bucket := range allBuckets {
-			_, err := tx.CreateBucketIfNotExists(bucket)
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-}
-
-type boltdbStorage struct {
+type Storage struct {
 	db *bolt.DB
 }
 
-func (s *boltdbStorage) get(tx *bolt.Tx, bucket []byte, key []byte, dest interface{}) (err error) {
+func (s *Storage) get(tx *bolt.Tx, bucket []byte, key []byte, dest interface{}) (err error) {
 	value := tx.Bucket(bucket).Get(key)
 	if value == nil {
 		err = osin.ErrNotFound
@@ -62,7 +48,7 @@ func (s *boltdbStorage) get(tx *bolt.Tx, bucket []byte, key []byte, dest interfa
 
 type writeFunc func(tx *bolt.Tx, bucket []byte, key []byte, value interface{}) error
 
-func (s *boltdbStorage) insert(tx *bolt.Tx, bucket []byte, key []byte, value interface{}) error {
+func (s *Storage) insert(tx *bolt.Tx, bucket []byte, key []byte, value interface{}) error {
 	v := tx.Bucket(bucket).Get(key)
 	if v != nil {
 		return storage.ErrAlreadyExists
@@ -70,7 +56,7 @@ func (s *boltdbStorage) insert(tx *bolt.Tx, bucket []byte, key []byte, value int
 	return s.put(tx, bucket, key, value)
 }
 
-func (s *boltdbStorage) update(tx *bolt.Tx, bucket []byte, key []byte, value interface{}) error {
+func (s *Storage) update(tx *bolt.Tx, bucket []byte, key []byte, value interface{}) error {
 	v := tx.Bucket(bucket).Get(key)
 	if v == nil {
 		return osin.ErrNotFound
@@ -78,7 +64,7 @@ func (s *boltdbStorage) update(tx *bolt.Tx, bucket []byte, key []byte, value int
 	return s.put(tx, bucket, key, value)
 }
 
-func (s *boltdbStorage) put(tx *bolt.Tx, bucket []byte, key []byte, value interface{}) error {
+func (s *Storage) put(tx *bolt.Tx, bucket []byte, key []byte, value interface{}) error {
 	var data []byte
 	if value != nil {
 		switch value := value.(type) {
@@ -91,15 +77,15 @@ func (s *boltdbStorage) put(tx *bolt.Tx, bucket []byte, key []byte, value interf
 	return tx.Bucket(bucket).Put(key, data)
 }
 
-func (s *boltdbStorage) delete(tx *bolt.Tx, bucket []byte, key []byte) error {
+func (s *Storage) delete(tx *bolt.Tx, bucket []byte, key []byte) error {
 	return tx.Bucket(bucket).Delete(key)
 }
 
-func (s *boltdbStorage) deleteClient(tx *bolt.Tx, id string) error {
+func (s *Storage) deleteClient(tx *bolt.Tx, id string) error {
 	return s.delete(tx, clientBucket, []byte(id))
 }
 
-func (s *boltdbStorage) putClient(tx *bolt.Tx, client osin.Client, f writeFunc) error {
+func (s *Storage) putClient(tx *bolt.Tx, client osin.Client, f writeFunc) error {
 	userdata, err := model.DefaultUserDataCodec.EncodeUserData(client.GetUserData())
 	if err != nil {
 		//TODO: log?
@@ -113,7 +99,7 @@ func (s *boltdbStorage) putClient(tx *bolt.Tx, client osin.Client, f writeFunc) 
 	return f(tx, clientBucket, []byte(msg.Id), &msg)
 }
 
-func (s *boltdbStorage) getClient(tx *bolt.Tx, id string) (osin.Client, error) {
+func (s *Storage) getClient(tx *bolt.Tx, id string) (osin.Client, error) {
 	msg := &model.Client{}
 	err := s.get(tx, clientBucket, []byte(id), msg)
 	if err != nil {
@@ -128,11 +114,11 @@ func (s *boltdbStorage) getClient(tx *bolt.Tx, id string) (osin.Client, error) {
 	}, nil
 }
 
-func (s *boltdbStorage) deleteAuthorize(tx *bolt.Tx, code string) error {
+func (s *Storage) deleteAuthorize(tx *bolt.Tx, code string) error {
 	return s.delete(tx, authorizeBucket, []byte(code))
 }
 
-func (s *boltdbStorage) putAuthorize(tx *bolt.Tx, authorize *osin.AuthorizeData, f writeFunc) error {
+func (s *Storage) putAuthorize(tx *bolt.Tx, authorize *osin.AuthorizeData, f writeFunc) error {
 	createdAt, _ := authorize.CreatedAt.MarshalBinary()
 	userdata, _ := model.DefaultUserDataCodec.EncodeUserData(authorize.UserData)
 	msg := model.AuthorizeData{
@@ -150,7 +136,7 @@ func (s *boltdbStorage) putAuthorize(tx *bolt.Tx, authorize *osin.AuthorizeData,
 	return f(tx, authorizeBucket, []byte(msg.Code), &msg)
 }
 
-func (s *boltdbStorage) getAuthorize(tx *bolt.Tx, code string) (*osin.AuthorizeData, error) {
+func (s *Storage) getAuthorize(tx *bolt.Tx, code string) (*osin.AuthorizeData, error) {
 	msg := &model.AuthorizeData{}
 	err := s.get(tx, authorizeBucket, []byte(code), msg)
 	if err != nil {
@@ -180,11 +166,11 @@ func (s *boltdbStorage) getAuthorize(tx *bolt.Tx, code string) (*osin.AuthorizeD
 	}, nil
 }
 
-func (s *boltdbStorage) deleteAccess(tx *bolt.Tx, token string) error {
+func (s *Storage) deleteAccess(tx *bolt.Tx, token string) error {
 	return s.delete(tx, accessBucket, []byte(token))
 }
 
-func (s *boltdbStorage) putAccess(tx *bolt.Tx, access *osin.AccessData, f writeFunc) error {
+func (s *Storage) putAccess(tx *bolt.Tx, access *osin.AccessData, f writeFunc) error {
 	createdAt, _ := access.CreatedAt.MarshalBinary()
 	userdata, _ := model.DefaultUserDataCodec.EncodeUserData(access.UserData)
 	msg := model.AccessData{
@@ -209,7 +195,7 @@ func (s *boltdbStorage) putAccess(tx *bolt.Tx, access *osin.AccessData, f writeF
 	return f(tx, accessBucket, []byte(msg.AccessToken), &msg)
 }
 
-func (s *boltdbStorage) getAccess(tx *bolt.Tx, token string) (*osin.AccessData, error) {
+func (s *Storage) getAccess(tx *bolt.Tx, token string) (*osin.AccessData, error) {
 	msg := &model.AccessData{}
 	err := s.get(tx, clientBucket, []byte(token), msg)
 	if err != nil {
@@ -241,18 +227,18 @@ func (s *boltdbStorage) getAccess(tx *bolt.Tx, token string) (*osin.AccessData, 
 	}, nil
 }
 
-func (s *boltdbStorage) putRefresh(tx *bolt.Tx, access *osin.AccessData, f writeFunc) error {
+func (s *Storage) putRefresh(tx *bolt.Tx, access *osin.AccessData, f writeFunc) error {
 	if access.RefreshToken == "" {
 		return nil
 	}
 	return f(tx, refreshBucket, []byte(access.RefreshToken), []byte(access.AccessToken))
 }
 
-func (s *boltdbStorage) deleteRefresh(tx *bolt.Tx, token string) error {
+func (s *Storage) deleteRefresh(tx *bolt.Tx, token string) error {
 	return s.delete(tx, refreshBucket, []byte(token))
 }
 
-func (s *boltdbStorage) getRefresh(tx *bolt.Tx, token string) (*osin.AccessData, error) {
+func (s *Storage) getRefresh(tx *bolt.Tx, token string) (*osin.AccessData, error) {
 	var accessToken []byte
 	err := s.get(tx, refreshBucket, []byte(token), &accessToken)
 	if err != nil {
@@ -261,42 +247,42 @@ func (s *boltdbStorage) getRefresh(tx *bolt.Tx, token string) (*osin.AccessData,
 	return s.getAccess(tx, string(accessToken))
 }
 
-func (s *boltdbStorage) Clone() osin.Storage {
+func (s *Storage) Clone() osin.Storage {
 	return s
 }
 
 // Close the resources the Storage potentially holds (using Clone for example)
-func (s *boltdbStorage) Close() {
+func (s *Storage) Close() {
 	s.db.Close()
 }
 
-func (s *boltdbStorage) CreateClient(client osin.Client) error {
+func (s *Storage) CreateClient(client osin.Client) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		return s.putClient(tx, client, s.insert)
 	})
 }
 
-func (s *boltdbStorage) UpdateClient(client osin.Client) error {
+func (s *Storage) UpdateClient(client osin.Client) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		return s.putClient(tx, client, s.update)
 	})
 }
 
-func (s *boltdbStorage) RemoveClient(id string) error {
+func (s *Storage) RemoveClient(id string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		return s.deleteClient(tx, id)
 	})
 }
 
 // GetClient loads the client by id (client_id)
-func (s *boltdbStorage) GetClient(id string) (osin.Client, error) {
+func (s *Storage) GetClient(id string) (osin.Client, error) {
 	tx, _ := s.db.Begin(false)
 	defer tx.Rollback()
 	return s.getClient(tx, id)
 }
 
 // SaveAuthorize saves authorize data.
-func (s *boltdbStorage) SaveAuthorize(authorize *osin.AuthorizeData) error {
+func (s *Storage) SaveAuthorize(authorize *osin.AuthorizeData) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		return s.putAuthorize(tx, authorize, s.insert)
 	})
@@ -305,14 +291,14 @@ func (s *boltdbStorage) SaveAuthorize(authorize *osin.AuthorizeData) error {
 // LoadAuthorize looks up AuthorizeData by a code.
 // Client information MUST be loaded together.
 // Optionally can return error if expired.
-func (s *boltdbStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
+func (s *Storage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 	tx, _ := s.db.Begin(false)
 	defer tx.Rollback()
 	return s.getAuthorize(tx, code)
 }
 
 // RemoveAuthorize revokes or deletes the authorization code.
-func (s *boltdbStorage) RemoveAuthorize(code string) error {
+func (s *Storage) RemoveAuthorize(code string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		return s.deleteAuthorize(tx, code)
 	})
@@ -320,7 +306,7 @@ func (s *boltdbStorage) RemoveAuthorize(code string) error {
 
 // SaveAccess writes AccessData.
 // If RefreshToken is not blank, it must save in a way that can be loaded using LoadRefresh.
-func (s *boltdbStorage) SaveAccess(access *osin.AccessData) error {
+func (s *Storage) SaveAccess(access *osin.AccessData) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		err := s.putAccess(tx, access, s.insert)
 		if err != nil {
@@ -333,14 +319,14 @@ func (s *boltdbStorage) SaveAccess(access *osin.AccessData) error {
 // LoadAccess retrieves access data by token. Client information MUST be loaded together.
 // AuthorizeData and AccessData DON'T NEED to be loaded if not easily available.
 // Optionally can return error if expired.
-func (s *boltdbStorage) LoadAccess(token string) (*osin.AccessData, error) {
+func (s *Storage) LoadAccess(token string) (*osin.AccessData, error) {
 	tx, _ := s.db.Begin(false)
 	defer tx.Rollback()
 	return s.getAccess(tx, token)
 }
 
 // RemoveAccess revokes or deletes an AccessData.
-func (s *boltdbStorage) RemoveAccess(token string) error {
+func (s *Storage) RemoveAccess(token string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		return s.deleteAccess(tx, token)
 	})
@@ -349,35 +335,34 @@ func (s *boltdbStorage) RemoveAccess(token string) error {
 // LoadRefresh retrieves refresh AccessData. Client information MUST be loaded together.
 // AuthorizeData and AccessData DON'T NEED to be loaded if not easily available.
 // Optionally can return error if expired.
-func (s *boltdbStorage) LoadRefresh(token string) (*osin.AccessData, error) {
+func (s *Storage) LoadRefresh(token string) (*osin.AccessData, error) {
 	tx, _ := s.db.Begin(false)
 	defer tx.Rollback()
 	return s.getRefresh(tx, token)
 }
 
 // RemoveRefresh revokes or deletes refresh AccessData.
-func (s *boltdbStorage) RemoveRefresh(token string) error {
+func (s *Storage) RemoveRefresh(token string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		return s.deleteRefresh(tx, token)
 	})
 }
 
-func New(dbPath string) (storage.Storage, error) {
-	folder, _ := path.Split(dbPath)
-	if folder != "" {
-		os.MkdirAll(folder, 0700)
-	}
-	db, err := bolt.Open(dbPath, 0600, bolt.DefaultOptions)
-	if err != nil {
-		return nil, err
-	}
+// Initializes the database
+func (s *Storage) InitDB() error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		for _, bucket := range allBuckets {
+			_, err := tx.CreateBucketIfNotExists(bucket)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
 
-	err = initDB(db)
-	if err != nil {
-		return nil, err
-	}
-
-	return &boltdbStorage{
+func New(db *bolt.DB) *Storage {
+	return &Storage{
 		db: db,
-	}, nil
+	}
 }

@@ -16,9 +16,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dcalandria/osin-boltdb/storage"
+	"github.com/boltdb/bolt"
 )
 
-var store storage.Storage
+var store *Storage
 var userDataMock = "bar"
 
 const alphabet = "abcdef0123456789"
@@ -37,11 +38,17 @@ func randomFilename(l int) string {
 }
 
 func TestMain(m *testing.M) {
-	var err error
 	filename := path.Join(os.TempDir(), randomFilename(10)+".db")
-	store, err = New(filename)
+
+	db, err := bolt.Open(filename, 0655, bolt.DefaultOptions)
 	if err != nil {
 		log.Fatalf("Could not open database: %v", err)
+	}
+
+	store = New(db)
+	err = store.InitDB()
+	if err != nil {
+		log.Fatalf("Could not init database: %v", err)
 	}
 
 	retCode := m.Run()
