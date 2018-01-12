@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package model;
+
+message UserData {
+    enum Type {
+        NIL = 0;
+        PROTO = 1;
+        BYTES = 2;
+        STRING = 3;
+        INT = 4;
+        UINT = 5;
+        BOOL = 6;
+        FLOAT = 7;
+    }
+    Type type = 1;
+    string name = 2;
+    bytes data = 3;
+}
+
+message Client {
+    string id = 1;
+    string secret = 2;
+    string redirect_uri = 3;
+    UserData user_data = 4;
+}
+
+message AuthorizeData {
+    string client_id = 1;
+    string code = 2;
+    int32 expires_in = 3;
+    string scope = 4;
+    string redirect_uri = 5;
+    string state = 6;
+    bytes created_at = 7;
+    UserData user_data = 8;
+    string code_challenge = 9;
+    string code_challenge_method = 10;
+}
+
+message AccessData {
+    string client_id = 1;
+    string authorize_code = 2;
+    string prev_access_token = 3;
+    string access_token = 4;
+    string refresh_token = 5;
+    int32 expires_in = 6;
+    string scope = 7;
+    string redirect_uri = 8;
+    bytes created_at = 9;
+    UserData user_data = 10;
+}
