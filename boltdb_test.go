@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"github.com/RangelReale/osin"
+	"github.com/boltdb/bolt"
 	"github.com/pborman/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dcalandria/osin-boltdb/storage"
-	"github.com/boltdb/bolt"
 )
 
 var store *Storage
@@ -53,7 +53,7 @@ func TestMain(m *testing.M) {
 
 	retCode := m.Run()
 
-	store.Close()
+	db.Close()
 	os.Remove(filename)
 
 	os.Exit(retCode)
